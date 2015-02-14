@@ -1,0 +1,114 @@
+```{r todaysDate,echo=FALSE}
+td <- format(Sys.Date(), format="%A, %B %d, %Y")
+```
+---
+title: "Assignment 1"
+author: "Micho Janssen"
+date: `r td`
+output: html_document
+---
+
+<br><br>
+<h4>Loading and preprocessing data </h4>
+
+Load data
+```{r loadData}
+act <- read.csv("activity.csv")
+```
+Remove rows with missing values
+```{r removeNAs}
+activity <- act[complete.cases(act),]
+```
+
+<br><br>
+<h4>Mean total tumber of steps taken per day: </h4>
+```{r stepsPerDay}
+y <- aggregate(activity$steps,by=list(activity$date),sum)
+names(y) <- c("day","totalsteps")
+spdmean <- format(mean(y$totalsteps),digits=6)
+spdmedian <- median(y$totalsteps)
+hist(y$totalsteps,ylab="",xlab="Steps",main="Total Steps per Day")
+```
+
+Total Number of Steps Taken per Day:
+
+Mean:     `r spdmean`
+
+Median: `r spdmedian`
+
+<br><br>
+<h4>Average daily activity pattern</h4>
+
+```{r averageActivity}
+y <- aggregate(activity$steps,by=list(activity$interval),mean)
+names(y) <- c("interval","meansteps")
+maxInterval <- y[which.max(y[,2]),1]
+plot(y$interval,y$meansteps,type="l",ylab="Average steps",xlab="Interval",main="Average Steps per Interval")
+```
+
+The 5-minute interval with the maximum number of steps is: `r maxInterval`
+
+<br><br>
+<h4>Imputting missing values</h4>
+
+```{r rowsMissingValues}
+nmissing <- nrow(act) - nrow(activity)
+```
+Number of rows with missing values: `r nmissing`
+
+Imputing strategy:
+
+If the 'steps' value is missing impute average of same interval from day before and day after. If the new value is still NA, use value of day before value. At beginning (day 0) use average of 2 days after, at end (last day) use average of 2 days before
+
+<br>
+Histogram showing incorporation of imputed data
+```{r imputtingMissingValues}
+# If the 'steps' value is missing impute average of same interval from day before and day after. If the new value is still NA, use value of day before value. At beginning (day 0) use average of 2 days after, at end (last day) use average of 2 days before
+numIntervals <- length(act[which(act$date == act[1,2]),2])
+actRows <- nrow(act)
+for (i in 1:actRows) {
+    y <- act[i,1]
+    if (is.na(y)) { # Begining of Frame
+        if (i <= numIntervals) {
+            act[i,1] <- (act[i+numIntervals,1]+act[i+2*numIntervals,1])/2
+        } else if ((i+numIntervals) > actRows) { # end of Frame
+            act[i,1] <- (act[i-numIntervals,1]+act[i-2*numIntervals,1])/2
+        } else { # Take average of day before and day after
+            if (is.na(act[i+numIntervals,1])) { # Still NA, use day before values
+                act[i,1] <-  act[i-numIntervals,1]
+            } else {
+                act[i,1] <- (act[i-numIntervals,1]+act[i+numIntervals,1])/2
+            } # .. (is.na(act[i+numIntervals,1))
+        } # ..(i <= numIntervals)
+    } # is.na(
+} # .. in 1:actRows
+# check any NAs with - act[!complete.cases(act),]
+
+# Values filled in, recalculate mean and median
+y <- aggregate(act$steps,by=list(act$date),sum)
+names(y) <- c("day","totalsteps")
+spdmean2 <- format(mean(y$totalsteps),digits=6)
+spdmedian2 <- format(median(y$totalsteps),digits=5)
+hist(y$totalsteps,ylab="",xlab="Steps",main="Total Steps per Day")
+```
+
+**Total Number of Steps Taken per Day:**
+
+|         | Imputing missing Values  | Removing Missing Values |
+|---------|--------------------------|-------------------------|
+|  Mean   |    `r spdmean2`          |    `r spdmean`          |
+|  Median |    `r spdmedian2`        |    `r spdmedian`        |
+
+<br><br>
+<h4>Weekday and Weekend Activity </h4>
+
+```{r weekdaysWeekends}
+y <- as.POSIXlt(act[,2])$wday
+y <- ifelse(y>0 & y<6,1,0)  # 1=weekdays, 0=weekends
+act$wde <- y                # add factor(y) to act df
+y <- aggregate(act$steps,by=list(act$interval,act$wde),mean)
+names(y)=c("interval","wday","averagesteps")
+y$wday <- factor(y$wday, labels = c("Weekends","Weekdays"))
+library(ggplot2)
+qplot(interval,averagesteps,data=y,geom="line",xlab="Interval",ylab="Average",facets=wday~.)
+```
